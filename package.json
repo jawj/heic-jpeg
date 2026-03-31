@@ -5,7 +5,7 @@
     "email": "george@mackerron.co.uk"
   },
   "repository": {
-    "url": "https://github.com/jawj/heic-jpeg",
+    "url": "git+https://github.com/jawj/heic-jpeg.git",
     "type": "git"
   },
   "version": "0.1.0",
