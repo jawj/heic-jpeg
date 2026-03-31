@@ -4,6 +4,10 @@
     "name": "George MacKerron",
     "email": "george@mackerron.co.uk"
   },
+  "repository": {
+    "url": "https://github.com/jawj/heic-jpeg",
+    "type": "git"
+  },
   "version": "0.1.0",
   "description": "Convert HEIC to JPEG with ICC profile passthrough, using libheif and mozjpeg WASM builds",
   "type": "module",
@@ -19,7 +23,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "libheif-js": "^1.18.0",
