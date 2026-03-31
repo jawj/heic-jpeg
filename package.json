@@ -1,0 +1,33 @@
+{
+  "name": "heic-jpeg",
+  "author": {
+    "name": "George MacKerron",
+    "email": "george@mackerron.co.uk"
+  },
+  "version": "0.1.0",
+  "description": "Convert HEIC to JPEG with ICC profile passthrough, using libheif and mozjpeg WASM builds",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "libheif-js": "^1.18.0",
+    "wasm-mozjpeg": "github:3bl3gamer/wasm-mozjpeg"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.5.0"
+  },
+  "license": "MIT"
+}
