@@ -5,10 +5,6 @@ import { extractIccFromHeic, injectIccIntoJpeg } from './icc.js';
 
 const JCS_RGB = 2 as const;
 
-// ---------------------------------------------------------------------------
-// MozJPEGWriter — encapsulates the stale-view footgun
-// ---------------------------------------------------------------------------
-
 /**
  * Thin wrapper around a mozjpeg compression session that re-acquires typed-
  * array views into WASM memory on every write.  This is necessary because
@@ -97,7 +93,7 @@ export async function heicToJpegAll(
   }
 }
 
-/** Extract the ICC colour profile from a HEIC file without decoding pixels. */
+/** extract the ICC colour profile from a HEIC file without decoding pixels. */
 export async function extractIccProfile(
   input: Uint8Array | ArrayBuffer,
 ): Promise<Uint8Array | null> {
@@ -157,15 +153,13 @@ function encodeHandle(
   const width: number = heif.heif_image_handle_get_width(handle);
   const height: number = heif.heif_image_handle_get_height(handle);
 
-  // Decode to interleaved RGB (3 bytes/pixel) — data stays in WASM heap
+  // decode to interleaved RGB (3 bytes/pixel) — data stays in WASM heap
   const decoded = heif.heif_js_decode_image2(
     handle,
     heif.heif_colorspace.heif_colorspace_RGB,
     heif.heif_chroma.heif_chroma_interleaved_RGB,
   );
-  if (!decoded.channels) {
-    throw new Error(`HEIF decode failed: ${decoded.message ?? 'unknown error'}`);
-  }
+  if (!decoded.channels) throw new Error(`HEIF decode failed: ${decoded.message ?? 'unknown error'}`);
 
   try {
     const channel = decoded.channels[0] as {
@@ -176,30 +170,19 @@ function encodeHandle(
     };
     const { data: pixelData, stride } = channel;
 
-    // -- Initialise mozjpeg scanline encoder -----------------------------------
     const writer = new MozJPEGWriter(moz, width, height);
-
     moz.cinfo_set_quality(quality, -1);
     moz.cinfo_set_optimize_coding(true);
     if (!progressive) moz.cinfo_disable_progression();
     if (trellis) moz.cinfo_set_trellis(10, true, true, true);
+
     moz.start_compress();
-
-    // -- Scanline transfer ----------------------------------------------------
-    for (let y = 0; y < height; y++) {
-      writer.writeScanline(pixelData, y * stride);
-    }
-
+    for (let y = 0; y < height; y++) writer.writeScanline(pixelData, y * stride);
     moz.finish_compress();
 
-    // -- Concatenate JPEG output chunks ----------------------------------------
     let jpegData = concatChunks(writer.chunks);
-
-    // -- ICC profile passthrough -----------------------------------------------
     const iccProfile = preserveIccProfile ? extractIccFromHeic(rawInput) : null;
-    if (iccProfile) {
-      jpegData = injectIccIntoJpeg(jpegData, iccProfile);
-    }
+    if (iccProfile) jpegData = injectIccIntoJpeg(jpegData, iccProfile);
 
     return {
       data: jpegData,
@@ -207,6 +190,7 @@ function encodeHandle(
       height,
       iccProfileTransferred: iccProfile !== null,
     };
+
   } finally {
     heif.heif_image_release(decoded.image);
   }
