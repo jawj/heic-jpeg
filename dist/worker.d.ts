@@ -1,12 +1,13 @@
-import type { ConvertOptions, ConvertResult } from './types.js';
+import type { ConvertOptions, ConvertResult, PixelOptions, PixelResult } from './types.js';
 export interface WorkerRequest {
     id: number;
-    fn: 'heicToJpeg' | 'heicToJpegAll';
+    fn: 'heicToJpeg' | 'heicToJpegAll' | 'heicToPixels';
     input: ArrayBuffer;
-    options?: ConvertOptions;
+    options?: ConvertOptions | PixelOptions;
 }
 export interface WorkerResponse {
     id: number;
     results?: ConvertResult[];
+    pixels?: PixelResult;
     error?: string;
 }

@@ -20,17 +20,15 @@ function getWorker() {
     const url = workerUrl ?? new URL('./worker.js', import.meta.url);
     worker = new Worker(url, { type: 'module' });
     worker.onmessage = (e) => {
-        const { id, results, error } = e.data;
+        const { id, results, pixels, error } = e.data;
         const p = pending.get(id);
         if (!p)
             return;
         pending.delete(id);
-        if (error) {
+        if (error)
             p.reject(new Error(error));
-        }
-        else {
-            p.resolve(results);
-        }
+        else
+            p.resolve((results ?? pixels));
     };
     return worker;
 }
@@ -54,6 +52,10 @@ export async function heicToJpegWorker(input, options) {
 /** Convert all images in a HEIC container to JPEG in a Web Worker. */
 export async function heicToJpegAllWorker(input, options) {
     return postRequest('heicToJpegAll', input, options);
+}
+/** Decode a HEIC file to packed RGB pixels in a Web Worker. */
+export async function heicToPixelsWorker(input, options) {
+    return postRequest('heicToPixels', input, options);
 }
 /** Terminate the worker. A new one will be created on the next call. */
 export function terminateWorker() {

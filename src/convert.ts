@@ -1,4 +1,4 @@
-import type { ConvertOptions, ConvertResult } from './types.js';
+import type { ConvertOptions, ConvertResult, PixelOptions, PixelResult } from './types.js';
 import type { MozJPEG } from 'wasm-mozjpeg';
 import { getHeif, getMozjpeg } from './wasm.js';
 import { extractIccFromHeic, injectIccIntoJpeg } from './icc.js';
@@ -98,6 +98,58 @@ export async function extractIccProfile(
   input: Uint8Array | ArrayBuffer,
 ): Promise<Uint8Array | null> {
   return extractIccFromHeic(asUint8Array(input));
+}
+
+/**
+ * Decode the primary image of a HEIC file to packed 8-bit interleaved RGB
+ * pixels, skipping the lossy JPEG round-trip. libheif applies the image's
+ * rotation/mirror transforms, so pixels come out upright.
+ *
+ * Currently always 8-bit: this libheif-js build's per-handle bit-depth query
+ * (`heif_image_handle_get_luma_bits_per_pixel`) is mis-bound (signature
+ * mismatch), so we can't reliably detect 10/12-bit sources. The `bits` field
+ * and `PixelOptions.preferHighBitDepth` exist so a 16-bit path can be enabled
+ * later without an API change.
+ */
+export async function heicToPixels(
+  input: Uint8Array | ArrayBuffer,
+  _options: PixelOptions = {},
+): Promise<PixelResult> {
+  const inputData = asUint8Array(input);
+  const heif = await getHeif();
+
+  const ctx = heif.heif_context_alloc();
+  try {
+    readContext(heif, ctx, inputData);
+    const handle = unwrapOrThrow(heif.heif_js_context_get_primary_image_handle(ctx));
+    try {
+      const width: number = heif.heif_image_handle_get_width(handle);
+      const height: number = heif.heif_image_handle_get_height(handle);
+      const decoded = heif.heif_js_decode_image2(
+        handle,
+        heif.heif_colorspace.heif_colorspace_RGB,
+        heif.heif_chroma.heif_chroma_interleaved_RGB,
+      );
+      if (!decoded.channels) throw new Error(`HEIF decode failed: ${decoded.message ?? 'unknown error'}`);
+
+      try {
+        const { data: src, stride } = decoded.channels[0] as { data: Uint8Array; stride: number };
+        // 3 bytes/pixel; copy row by row honouring the source stride (padding).
+        const rowBytes = width * 3;
+        const out = new Uint8Array(rowBytes * height);
+        for (let y = 0; y < height; y++) {
+          out.set(src.subarray(y * stride, y * stride + rowBytes), y * rowBytes);
+        }
+        return { data: out, width, height, bits: 8, iccProfile: extractIccFromHeic(inputData) };
+      } finally {
+        heif.heif_image_release(decoded.image);
+      }
+    } finally {
+      heif.heif_image_handle_release(handle);
+    }
+  } finally {
+    heif.heif_context_free(ctx);
+  }
 }
 
 // ---------------------------------------------------------------------------

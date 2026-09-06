@@ -1,11 +1,11 @@
-import type { ConvertOptions, ConvertResult } from './types.js';
+import type { ConvertOptions, ConvertResult, PixelOptions, PixelResult } from './types.js';
 import type { WorkerRequest, WorkerResponse } from './worker.js';
 
 let worker: Worker | null = null;
 let workerUrl: string | URL | undefined;
 let nextId = 0;
 const pending = new Map<number, {
-  resolve: (results: ConvertResult[]) => void;
+  resolve: (value: ConvertResult[] | PixelResult) => void;
   reject: (error: Error) => void;
 }>();
 
@@ -27,15 +27,12 @@ function getWorker(): Worker {
   const url = workerUrl ?? new URL('./worker.js', import.meta.url);
   worker = new Worker(url, { type: 'module' });
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-    const { id, results, error } = e.data;
+    const { id, results, pixels, error } = e.data;
     const p = pending.get(id);
     if (!p) return;
     pending.delete(id);
-    if (error) {
-      p.reject(new Error(error));
-    } else {
-      p.resolve(results!);
-    }
+    if (error) p.reject(new Error(error));
+    else p.resolve((results ?? pixels)!);
   };
   return worker;
 }
@@ -43,15 +40,15 @@ function getWorker(): Worker {
 function postRequest(
   fn: WorkerRequest['fn'],
   input: Uint8Array | ArrayBuffer,
-  options?: ConvertOptions,
-): Promise<ConvertResult[]> {
+  options?: ConvertOptions | PixelOptions,
+): Promise<ConvertResult[] | PixelResult> {
   const w = getWorker();
   const id = nextId++;
   const buffer = input instanceof Uint8Array
     ? (input.buffer as ArrayBuffer).slice(input.byteOffset, input.byteOffset + input.byteLength)
     : (input as ArrayBuffer).slice(0);
 
-  return new Promise<ConvertResult[]>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     const msg: WorkerRequest = { id, fn, input: buffer, options };
     w.postMessage(msg, [buffer]);
@@ -63,7 +60,7 @@ export async function heicToJpegWorker(
   input: Uint8Array | ArrayBuffer,
   options?: ConvertOptions,
 ): Promise<ConvertResult> {
-  const results = await postRequest('heicToJpeg', input, options);
+  const results = await postRequest('heicToJpeg', input, options) as ConvertResult[];
   return results[0];
 }
 
@@ -72,7 +69,15 @@ export async function heicToJpegAllWorker(
   input: Uint8Array | ArrayBuffer,
   options?: ConvertOptions,
 ): Promise<ConvertResult[]> {
-  return postRequest('heicToJpegAll', input, options);
+  return postRequest('heicToJpegAll', input, options) as Promise<ConvertResult[]>;
+}
+
+/** Decode a HEIC file to packed RGB pixels in a Web Worker. */
+export async function heicToPixelsWorker(
+  input: Uint8Array | ArrayBuffer,
+  options?: PixelOptions,
+): Promise<PixelResult> {
+  return postRequest('heicToPixels', input, options) as Promise<PixelResult>;
 }
 
 /** Terminate the worker. A new one will be created on the next call. */
