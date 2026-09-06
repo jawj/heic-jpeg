@@ -1,7 +1,7 @@
 import type { ConvertOptions, ConvertResult, PixelOptions, PixelResult } from './types.js';
 import type { MozJPEG } from 'wasm-mozjpeg';
 import { getHeif, getMozjpeg } from './wasm.js';
-import { extractIccFromHeic, injectIccIntoJpeg } from './icc.js';
+import { extractIccFromHeic, injectIccIntoJpeg, bitDepthFromHeic } from './icc.js';
 
 const JCS_RGB = 2 as const;
 
@@ -101,23 +101,23 @@ export async function extractIccProfile(
 }
 
 /**
- * Decode the primary image of a HEIC file to packed 8-bit interleaved RGB
- * pixels, skipping the lossy JPEG round-trip. libheif applies the image's
- * rotation/mirror transforms, so pixels come out upright.
+ * Decode the primary image of a HEIC file to packed interleaved RGB pixels,
+ * skipping the lossy JPEG round-trip. 10/12-bit sources are returned as 16-bit
+ * (scaled to full 0–65535 range) unless `preferHighBitDepth` is false. libheif
+ * applies the image's rotation/mirror transforms, so pixels come out upright.
  *
- * Always 8-bit for now: this libheif-js@1.19 build's 16-bit path
- * (`interleaved_RRGGBB_LE`) is unreliable — it returns all-zero pixels for
- * grid-tiled HEICs, which is exactly how iOS stores 10/12-bit photos. We
- * request 8-bit and let libheif downconvert (which is correct). The `bits`
- * field and `PixelOptions.preferHighBitDepth` keep the API forward-compatible
- * for when the binding is fixed. (See bitDepthFromHeic for reading the source
- * depth from the container.)
+ * Source depth comes from the container (see bitDepthFromHeic) — libheif-js's
+ * per-handle bit-depth query is mis-bound, and iOS stores high-bit-depth photos
+ * as grid tiles whose primary item under-reports depth.
  */
 export async function heicToPixels(
   input: Uint8Array | ArrayBuffer,
-  _options: PixelOptions = {},
+  options: PixelOptions = {},
 ): Promise<PixelResult> {
+  const { preferHighBitDepth = true } = options;
   const inputData = asUint8Array(input);
+  const depth = bitDepthFromHeic(inputData);
+  const highBits = preferHighBitDepth && depth > 8;
   const heif = await getHeif();
 
   const ctx = heif.heif_context_alloc();
@@ -130,19 +130,37 @@ export async function heicToPixels(
       const decoded = heif.heif_js_decode_image2(
         handle,
         heif.heif_colorspace.heif_colorspace_RGB,
-        heif.heif_chroma.heif_chroma_interleaved_RGB,
+        highBits ? heif.heif_chroma.heif_chroma_interleaved_RRGGBB_LE : heif.heif_chroma.heif_chroma_interleaved_RGB,
       );
       if (!decoded.channels) throw new Error(`HEIF decode failed: ${decoded.message ?? 'unknown error'}`);
 
       try {
         const { data: src, stride } = decoded.channels[0] as { data: Uint8Array; stride: number };
-        // 3 bytes/pixel; copy row by row honouring the source stride (padding).
+        const iccProfile = extractIccFromHeic(inputData);
+
+        if (highBits) {
+          // RRGGBB_LE: 16-bit little-endian, samples right-aligned in `depth`
+          // bits; rescale to full 16-bit. Read straight out (single decode, so
+          // the WASM-heap view is still valid).
+          const out = new Uint16Array(width * height * 3);
+          const maxIn = (1 << depth) - 1;
+          for (let y = 0; y < height; y++) {
+            const sRow = y * stride, dRow = y * width * 3;
+            for (let x = 0; x < width * 3; x++) {
+              const lo = src[sRow + x * 2], hi = src[sRow + x * 2 + 1];
+              out[dRow + x] = Math.round(((lo | (hi << 8)) * 65535) / maxIn);
+            }
+          }
+          return { data: out, width, height, bits: 16, iccProfile };
+        }
+
+        // interleaved RGB: 3 bytes/pixel; copy row by row honouring stride.
         const rowBytes = width * 3;
         const out = new Uint8Array(rowBytes * height);
         for (let y = 0; y < height; y++) {
           out.set(src.subarray(y * stride, y * stride + rowBytes), y * rowBytes);
         }
-        return { data: out, width, height, bits: 8, iccProfile: extractIccFromHeic(inputData) };
+        return { data: out, width, height, bits: 8, iccProfile };
       } finally {
         heif.heif_image_release(decoded.image);
       }

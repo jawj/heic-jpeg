@@ -6,16 +6,13 @@ export declare function heicToJpegAll(input: Uint8Array | ArrayBuffer, options?:
 /** extract the ICC colour profile from a HEIC file without decoding pixels. */
 export declare function extractIccProfile(input: Uint8Array | ArrayBuffer): Promise<Uint8Array | null>;
 /**
- * Decode the primary image of a HEIC file to packed 8-bit interleaved RGB
- * pixels, skipping the lossy JPEG round-trip. libheif applies the image's
- * rotation/mirror transforms, so pixels come out upright.
+ * Decode the primary image of a HEIC file to packed interleaved RGB pixels,
+ * skipping the lossy JPEG round-trip. 10/12-bit sources are returned as 16-bit
+ * (scaled to full 0–65535 range) unless `preferHighBitDepth` is false. libheif
+ * applies the image's rotation/mirror transforms, so pixels come out upright.
  *
- * Always 8-bit for now: this libheif-js@1.19 build's 16-bit path
- * (`interleaved_RRGGBB_LE`) is unreliable — it returns all-zero pixels for
- * grid-tiled HEICs, which is exactly how iOS stores 10/12-bit photos. We
- * request 8-bit and let libheif downconvert (which is correct). The `bits`
- * field and `PixelOptions.preferHighBitDepth` keep the API forward-compatible
- * for when the binding is fixed. (See bitDepthFromHeic for reading the source
- * depth from the container.)
+ * Source depth comes from the container (see bitDepthFromHeic) — libheif-js's
+ * per-handle bit-depth query is mis-bound, and iOS stores high-bit-depth photos
+ * as grid tiles whose primary item under-reports depth.
  */
-export declare function heicToPixels(input: Uint8Array | ArrayBuffer, _options?: PixelOptions): Promise<PixelResult>;
+export declare function heicToPixels(input: Uint8Array | ArrayBuffer, options?: PixelOptions): Promise<PixelResult>;
