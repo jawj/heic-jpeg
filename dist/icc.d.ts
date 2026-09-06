@@ -6,6 +6,17 @@
  */
 export declare function extractIccFromHeic(data: Uint8Array): Uint8Array | null;
 /**
+ * Read the per-channel bit depth (8/10/12) of the main image from the HEIC
+ * container — binding-independent (libheif-js's per-handle query is mis-bound).
+ *
+ * iOS 10/12-bit photos are grid-tiled: the primary `grid` item declares an
+ * 8-bit `pixi`, while the real depth lives in the tiles' `hvcC`/`pixi`. So we
+ * take the MAX depth across every image property in ipco. Auxiliary images
+ * (gain maps) are 8-bit on iOS, so the max is the main image's depth. Prefers
+ * the direct `pixi`, falling back to the codec config (`hvcC` HEVC / `av1C` AV1).
+ */
+export declare function bitDepthFromHeic(data: Uint8Array): number;
+/**
  * Inject an ICC colour profile into a JPEG byte stream by inserting APP2
  * markers immediately after SOI (0xFF 0xD8).
  *

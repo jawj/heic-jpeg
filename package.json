@@ -24,16 +24,17 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "test": "npm run build && node --test \"test/**/*.test.mjs\""
   },
   "dependencies": {
-    "libheif-js": "^1.18.0",
+    "libheif-js": "^1.23.2",
     "wasm-mozjpeg": "github:3bl3gamer/wasm-mozjpeg"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "typescript": "^5.5.0"
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2"
   },
   "license": "MIT",
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@12.3.4"
 }

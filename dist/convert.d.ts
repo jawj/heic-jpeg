@@ -10,10 +10,12 @@ export declare function extractIccProfile(input: Uint8Array | ArrayBuffer): Prom
  * pixels, skipping the lossy JPEG round-trip. libheif applies the image's
  * rotation/mirror transforms, so pixels come out upright.
  *
- * Currently always 8-bit: this libheif-js build's per-handle bit-depth query
- * (`heif_image_handle_get_luma_bits_per_pixel`) is mis-bound (signature
- * mismatch), so we can't reliably detect 10/12-bit sources. The `bits` field
- * and `PixelOptions.preferHighBitDepth` exist so a 16-bit path can be enabled
- * later without an API change.
+ * Always 8-bit for now: this libheif-js@1.19 build's 16-bit path
+ * (`interleaved_RRGGBB_LE`) is unreliable — it returns all-zero pixels for
+ * grid-tiled HEICs, which is exactly how iOS stores 10/12-bit photos. We
+ * request 8-bit and let libheif downconvert (which is correct). The `bits`
+ * field and `PixelOptions.preferHighBitDepth` keep the API forward-compatible
+ * for when the binding is fixed. (See bitDepthFromHeic for reading the source
+ * depth from the container.)
  */
 export declare function heicToPixels(input: Uint8Array | ArrayBuffer, _options?: PixelOptions): Promise<PixelResult>;

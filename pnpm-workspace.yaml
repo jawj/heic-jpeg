@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - libheif-js@1.23.2
